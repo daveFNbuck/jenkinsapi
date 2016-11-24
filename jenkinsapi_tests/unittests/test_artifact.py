@@ -64,6 +64,26 @@ class ArtifactTest(unittest.TestCase):
             self._build.job.jenkins)
         fp.validate_for_build.assert_called_once_with('artifact.zip', 'TestJob', 9999)
 
+    @patch('jenkinsapi.artifact.open', mock_open(), create=True)
+    @patch('jenkinsapi.artifact.Fingerprint', spec=True)
+    def test_verify_download_valid_positive_with_rename(self, MockFingerprint):
+        # mock_open() only mocks out f.read(), which reads all content at a time.
+        # However, _verify_download() reads the file in chunks.
+        f = jenkinsapi.artifact.open.return_value
+        f.read.side_effect = [b'chunk1', b'chunk2', b''] # empty string indicates EOF
+
+        fp = MockFingerprint.return_value
+        fp.validate_for_build.return_value = True
+        fp.unknown = False
+
+        self.assertTrue(self._artifact._verify_download('/tmp/temporary_filename', False))
+
+        MockFingerprint.assert_called_once_with(
+            'http://localhost',
+            '097c42989a9e5d9dcced7b35ec4b0486', # MD5 of 'chunk1chunk2'
+            self._build.job.jenkins)
+        fp.validate_for_build.assert_called_once_with('artifact.zip', 'TestJob', 9999)
+
     @patch('jenkinsapi.artifact.Fingerprint', spec=True)
     def test_verify_download_valid_negative(self, MockFingerprint):
         artifact = self._artifact
